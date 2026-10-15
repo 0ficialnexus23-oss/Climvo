@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('OWNER', 'OFFICE', 'TECH');
 
@@ -313,10 +316,10 @@ CREATE TABLE "MessageLog" (
 CREATE INDEX "Tenant_createdAt_idx" ON "Tenant"("createdAt");
 
 -- CreateIndex
-CREATE INDEX "User_tenantId_idx" ON "User"("tenantId");
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_tenantId_email_key" ON "User"("tenantId", "email");
+CREATE INDEX "User_tenantId_idx" ON "User"("tenantId");
 
 -- CreateIndex
 CREATE INDEX "Customer_tenantId_idx" ON "Customer"("tenantId");
@@ -527,3 +530,4 @@ ALTER TABLE "MessageLog" ADD CONSTRAINT "MessageLog_customerId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "MessageLog" ADD CONSTRAINT "MessageLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
