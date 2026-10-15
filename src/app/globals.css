@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --climvo-primary: #0ea5e9;
+  --climvo-primary-dark: #0369a1;
+  --climvo-bg: #f8fafc;
+  --climvo-text: #0f172a;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--climvo-bg);
+  color: var(--climvo-text);
+  -webkit-font-smoothing: antialiased;
+}
