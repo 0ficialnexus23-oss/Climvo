@@ -1,0 +1,509 @@
+// Climvo — Modelo de datos
+// Documentación: docs/ARQUITECTURA.md
+//
+// Regla de oro: TODAS las tablas de negocio incluyen `tenantId`.
+// El aislamiento entre empresas se verifica en la capa de servicio.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  OWNER
+  OFFICE
+  TECH
+}
+
+enum CustomerType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+}
+
+enum ServiceRequestStatus {
+  NEW
+  SCHEDULED
+  QUOTED
+  APPROVED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum AppointmentType {
+  PREVENTIVE
+  CORRECTIVE
+  INSTALLATION
+  INSPECTION
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+  NO_SHOW
+}
+
+enum WorkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  OTHER
+}
+
+enum MaintenanceFrequency {
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+enum AttachmentType {
+  PHOTO
+  VIDEO
+  SIGNATURE
+  DOCUMENT
+}
+
+enum MessageChannel {
+  WHATSAPP_DEEP_LINK
+  WHATSAPP_API
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Empresa (tenant) y usuarios
+// ---------------------------------------------------------------------------
+
+model Tenant {
+  id                 String    @id @default(cuid())
+  name               String
+  legalName          String?
+  rfc                String?
+  phone              String?
+  email              String?
+  address            String?
+  timezone           String    @default("America/Mexico_City")
+  logoUrl            String?
+  plan               String    @default("BASIC")
+  subscriptionStatus String    @default("TRIAL")
+  trialEndsAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  users            User[]
+  customers        Customer[]
+  locations        Location[]
+  equipment        Equipment[]
+  serviceRequests  ServiceRequest[]
+  quotes           Quote[]
+  appointments     Appointment[]
+  workOrders       WorkOrder[]
+  maintenancePlans MaintenancePlan[]
+  payments         Payment[]
+  messages         MessageLog[]
+  attachments      Attachment[]
+
+  @@index([createdAt])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  name         String
+  email        String
+  passwordHash String
+  role         UserRole  @default(TECH)
+  phone        String?
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments    Appointment[]    @relation("AppointmentTechnician")
+  workOrders      WorkOrder[]      @relation("WorkOrderTechnician")
+  createdRequests ServiceRequest[] @relation("RequestCreatedBy")
+  attachments     Attachment[]
+  messages        MessageLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+// ---------------------------------------------------------------------------
+// Clientes y ubicaciones
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id          String       @id @default(cuid())
+  tenantId    String
+  name        String
+  type        CustomerType @default(RESIDENTIAL)
+  contactName String?
+  phone       String?
+  email       String?
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locations        Location[]
+  equipment        Equipment[]
+  serviceRequests  ServiceRequest[]
+  quotes           Quote[]
+  appointments     Appointment[]
+  workOrders       WorkOrder[]
+  maintenancePlans MaintenancePlan[]
+  payments         Payment[]
+  messages         MessageLog[]
+
+  @@index([tenantId])
+  @@index([tenantId, name])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  name        String
+  address     String?
+  city        String?
+  state       String?
+  zip         String?
+  contactName String?
+  phone       String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  equipment       Equipment[]
+  serviceRequests ServiceRequest[]
+  appointments    Appointment[]
+  workOrders      WorkOrder[]
+
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+// ---------------------------------------------------------------------------
+// Equipos (activos) — el nucleo del producto
+// ---------------------------------------------------------------------------
+
+model Equipment {
+  id            String    @id @default(cuid())
+  tenantId      String
+  customerId    String
+  locationId    String?
+  type          String // minisplit, chiller, fan coil, etc.
+  brand         String?
+  model         String?
+  serialNumber  String?
+  capacityTr    Decimal?  @db.Decimal(6, 2)
+  refrigerant   String?
+  installDate   DateTime?
+  warrantyUntil DateTime?
+  qrToken       String    @unique
+  notes         String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  location         Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  serviceRequests  ServiceRequest[]
+  appointments     Appointment[]
+  workOrders       WorkOrder[]
+  maintenancePlans MaintenancePlan[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([locationId])
+}
+
+// ---------------------------------------------------------------------------
+// Solicitudes y presupuestos
+// ---------------------------------------------------------------------------
+
+model ServiceRequest {
+  id          String               @id @default(cuid())
+  tenantId    String
+  customerId  String
+  locationId  String?
+  equipmentId String?
+  createdById String?
+  source      String               @default("WHATSAPP")
+  description String
+  priority    Int                  @default(2)
+  status      ServiceRequestStatus @default(NEW)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  location    Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  equipment   Equipment?     @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  createdBy   User?          @relation("RequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  quotes      Quote[]
+  appointments Appointment[]
+  workOrders  WorkOrder[]
+
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+model Quote {
+  id               String      @id @default(cuid())
+  tenantId         String
+  customerId       String
+  serviceRequestId String?
+  number           String
+  status           QuoteStatus @default(DRAFT)
+  currency         String      @default("MXN")
+  subtotal         Decimal     @default(0) @db.Decimal(12, 2)
+  taxRate          Decimal     @default(0.16) @db.Decimal(5, 4)
+  taxAmount        Decimal     @default(0) @db.Decimal(12, 2)
+  total            Decimal     @default(0) @db.Decimal(12, 2)
+  validUntil       DateTime?
+  approvedAt       DateTime?
+  notes            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceRequest ServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  items          QuoteItem[]
+  workOrders     WorkOrder[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  description String
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  total       Decimal @db.Decimal(12, 2)
+  sortOrder   Int     @default(0)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+// ---------------------------------------------------------------------------
+// Agenda y ordenes de servicio
+// ---------------------------------------------------------------------------
+
+model Appointment {
+  id               String            @id @default(cuid())
+  tenantId         String
+  customerId       String
+  locationId       String?
+  equipmentId      String?
+  serviceRequestId String?
+  technicianId     String?
+  type             AppointmentType   @default(PREVENTIVE)
+  status           AppointmentStatus @default(SCHEDULED)
+  title            String?
+  startsAt         DateTime
+  endsAt           DateTime?
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  location       Location?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  equipment      Equipment?      @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  serviceRequest ServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  technician     User?           @relation("AppointmentTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  workOrder      WorkOrder?
+
+  @@index([tenantId, startsAt])
+  @@index([technicianId, startsAt])
+}
+
+model WorkOrder {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  number             String
+  customerId         String
+  locationId         String?
+  equipmentId        String?
+  appointmentId      String?         @unique
+  serviceRequestId   String?
+  quoteId            String?
+  technicianId       String?
+  status             WorkOrderStatus @default(OPEN)
+  findings           String?
+  workPerformed      String?
+  recommendations    String?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  clientSignatureUrl String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  location       Location?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  equipment      Equipment?      @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  appointment    Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  serviceRequest ServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  quote          Quote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  technician     User?           @relation("WorkOrderTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  tasks          WorkOrderTask[]
+  attachments    Attachment[]
+  payments       Payment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+model WorkOrderTask {
+  id          String  @id @default(cuid())
+  workOrderId String
+  description String
+  done        Boolean @default(false)
+  reading     String?
+  sortOrder   Int     @default(0)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+}
+
+model Attachment {
+  id           String         @id @default(cuid())
+  tenantId     String
+  workOrderId  String?
+  type         AttachmentType
+  fileUrl      String
+  mimeType     String?
+  sizeBytes    Int?
+  caption      String?
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder  WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  uploadedBy User?      @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([workOrderId])
+}
+
+// ---------------------------------------------------------------------------
+// Mantenimiento preventivo
+// ---------------------------------------------------------------------------
+
+model MaintenancePlan {
+  id          String               @id @default(cuid())
+  tenantId    String
+  customerId  String
+  equipmentId String
+  frequency   MaintenanceFrequency
+  nextDate    DateTime
+  lastDate    DateTime?
+  active      Boolean              @default(true)
+  notes       String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, nextDate])
+  @@index([equipmentId])
+}
+
+// ---------------------------------------------------------------------------
+// Cobros y comunicaciones
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id          String        @id @default(cuid())
+  tenantId    String
+  customerId  String
+  workOrderId String?
+  amount      Decimal       @db.Decimal(12, 2)
+  method      PaymentMethod @default(CASH)
+  status      PaymentStatus @default(PENDING)
+  reference   String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+model MessageLog {
+  id         String         @id @default(cuid())
+  tenantId   String
+  customerId String?
+  userId     String?
+  channel    MessageChannel @default(WHATSAPP_DEEP_LINK)
+  template   String
+  payload    String?
+  status     MessageStatus  @default(PENDING)
+  sentAt     DateTime?
+  createdAt  DateTime       @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
