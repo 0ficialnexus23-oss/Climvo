@@ -149,7 +149,7 @@ model User {
   id           String    @id @default(cuid())
   tenantId     String
   name         String
-  email        String
+  email        String    @unique
   passwordHash String
   role         UserRole  @default(TECH)
   phone        String?
@@ -165,7 +165,6 @@ model User {
   attachments     Attachment[]
   messages        MessageLog[]
 
-  @@unique([tenantId, email])
   @@index([tenantId])
 }
 
