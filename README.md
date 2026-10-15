@@ -8,7 +8,27 @@ Climvo ayuda a empresas HVAC de 2 a 10 técnicos a gestionar clientes, equipos, 
 
 ## Estado
 
-**Fase 0 — Setup.** Proyecto en construcción. Este repositorio todavía no contiene funcionalidad operativa.
+**Fase 1 — Núcleo operativo (terminada y probada).**
+
+Ya funciona:
+
+- Autenticación: registro de empresa, inicio y cierre de sesión, sesión en cookie `httpOnly`.
+- Roles de usuario: `OWNER`, `OFFICE`, `TECH`.
+- Aislamiento multi-tenant verificado en todas las consultas (probado con dos empresas).
+- **Clientes**: alta, edición, eliminación, búsqueda y ficha con historial.
+- **Ubicaciones** por cliente.
+- **Equipos**: ficha técnica (marca, modelo, serie, capacidad, refrigerante, garantía), código QR e historial de mantenimiento.
+
+En construcción: solicitudes, presupuestos, agenda, órdenes de servicio, evidencia, reportes, mantenimiento preventivo y cobros.
+
+### Pruebas
+
+El proyecto incluye comprobaciones automáticas del núcleo en `scripts/`:
+
+```bash
+npx tsx scripts/test-registro.ts   # registro, hash y validaciones
+npx tsx scripts/test-fase1.ts      # CRUD y aislamiento entre empresas
+```
 
 ## Flujo central del producto
 
