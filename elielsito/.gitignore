@@ -1,0 +1,33 @@
+# Entorno y secretos
+.env
+.env.local
+*.env
+
+# Datos locales de Elielsito (memoria, auditoría, copias)
+*.db
+*.db-journal
+*.db-wal
+audit.log
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+pytest-cache-files-*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editores / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
